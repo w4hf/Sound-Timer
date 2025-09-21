@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  timer-app:
+    build: .
+    container_name: sound-timer
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./sounds:/app/sounds
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
