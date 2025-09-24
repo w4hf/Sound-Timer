@@ -428,9 +428,12 @@
                 return;
             }
 
-            // Stop any currently playing audio
+            // Stop any currently playing audio to prevent overlapping
             if (currentAudio) {
                 currentAudio.pause();
+                currentAudio.currentTime = 0;
+                currentAudio.onended = null;
+                currentAudio.onerror = null;
                 currentAudio = null;
             }
 
@@ -438,20 +441,45 @@
             currentAudio = new Audio(selectedSound.path);
             currentAudio.volume = (preview ? 0.3 : 1) * (volumeSlider.value / 100);
             
-            currentAudio.play().catch(error => {
+            // Add error handling
+            currentAudio.onerror = (error) => {
                 console.error('Error playing sound:', error);
                 status.textContent = 'Error playing sound. Check file format.';
-            });
-
+                currentAudio = null;
+            };
+            
             currentAudio.onended = () => {
                 currentAudio = null;
             };
+            
+            // Play with promise handling
+            const playPromise = currentAudio.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.error('Error playing sound:', error);
+                    status.textContent = 'Error playing sound. Check file format.';
+                    currentAudio = null;
+                });
+            }
         }
 
         function startTimer() {
             if (!selectedSound) {
                 status.textContent = 'Please select a sound first';
                 return;
+            }
+
+            // Clean up any existing timer before starting a new one
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            
+            // Clear any pending restart timeout
+            if (window.restartTimeout) {
+                clearTimeout(window.restartTimeout);
+                window.restartTimeout = null;
             }
 
             const durationMinutes = parseInt(durationSlider.value);
@@ -470,8 +498,24 @@
         }
 
         function stopTimer() {
-            clearInterval(timerInterval);
-            timerInterval = null;
+            // Clear all timers and timeouts
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            
+            if (window.restartTimeout) {
+                clearTimeout(window.restartTimeout);
+                window.restartTimeout = null;
+            }
+            
+            // Stop any currently playing audio
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                currentAudio = null;
+            }
+            
             endTime = null;
             isRunning = false;
             
@@ -484,23 +528,70 @@
         }
 
         function updateTimer() {
+            if (!endTime || !isRunning) {
+                // Safety check - stop timer if state is inconsistent
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
+                return;
+            }
+            
             const now = Date.now();
             const remaining = Math.max(0, endTime - now);
             const seconds = Math.ceil(remaining / 1000);
             
             updateTimeDisplay(seconds);
             
-            if (remaining <= 0) {
+            if (remaining <= 0 && isRunning) {
+                // Prevent multiple completions
+                isRunning = false;
                 timerComplete();
             }
         }
 
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            if (window.restartTimeout) {
+                clearTimeout(window.restartTimeout);
+            }
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+        });
+
+        // Handle visibility change to prevent issues when tab is inactive
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && isRunning && endTime) {
+                // Recalculate time when tab becomes visible again
+                const now = Date.now();
+                if (now >= endTime) {
+                    isRunning = false;
+                    timerComplete();
+                }
+            }
+        });
+
         function timerComplete() {
+            // Clear any existing interval first to prevent duplicates
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            
             playSound(false);
             
             if (repeatCheckbox.checked) {
                 status.textContent = 'Timer complete! Restarting...';
-                setTimeout(() => {
+                // Clear any existing restart timeout
+                if (window.restartTimeout) {
+                    clearTimeout(window.restartTimeout);
+                }
+                window.restartTimeout = setTimeout(() => {
                     startTimer();
                 }, 1000);
             } else {
