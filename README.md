@@ -20,8 +20,8 @@ A web-based timer application with custom sound notifications that automatically
 ## Quick Start
 
 ### Prerequisites
-- Docker and Docker Compose installed
-- Audio files in MP3, WAV, OGG, M4A, or WebM format
+- Docker or Docker Compose
+- Audio files in MP3, WAV, OGG, M4A, or WebM format. Could be downloaded using the given commands below.
 
 ### Setup Instructions
 
